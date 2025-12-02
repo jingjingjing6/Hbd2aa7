@@ -3,132 +3,515 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Happy Birthday — Ahmed</title>
+<title>Happy Birthday — Ahmed (animated)</title>
 <style>
   :root{
-    --bg-color:#000;
-    --bubble-white: rgba(255,255,255,0.95);
-    --bubble-yellow: rgba(255,230,120,0.95);
-    --text-color:#111;
-    --shadow: 0 6px 18px rgba(0,0,0,0.45);
-    --font-sans: "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+    --bg-dark:#000;
+    --bg-white:#fff;
+    --text-dark:#111;
+    --font-sans:"Helvetica Neue", Arial, "Noto Sans", sans-serif;
+    --bubble-bg:#ffffff;
+    --bubble-color:#111;
   }
-  html,body{height:100%;margin:0;background:var(--bg-color);font-family:var(--font-sans);}
-  .stage{position:relative;height:100vh;width:100vw;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+  html,body{
+    height:100%;
+    margin:0;
+    font-family:var(--font-sans);
+    background:var(--bg-dark);
+    color:var(--text-dark);
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+  }
+
+  /* APP wrapper that will be rotated/scaled on portrait phones */
+  #app{
+    position:relative;
+    width:100vw;
+    height:100vh;
+    overflow:hidden;
+    transform-origin:center center;
+    transition:transform .32s ease;
+    touch-action:manipulation;
+    background:transparent;
+  }
+
+  /* Landscape prompt (style C = black bg, white text, English) */
+  #landscapePrompt{
+    position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,0.98);color:#fff;font-size:18px;text-align:center;padding:24px;
+    opacity:0;pointer-events:none;transition:opacity .36s ease;
+  }
+  #landscapePrompt.show{opacity:1;pointer-events:auto;}
+  #landscapePrompt .txt{max-width:84vw;line-height:1.4}
+
+  /* Stage inside app */
+  .stage{position:relative;height:100%;width:100%;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+
   /* fullscreen images */
-  .cover-img, .bg-img{
-    position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
-    -webkit-user-select:none;user-select:none;
-  }
-  .cover-img{z-index:10;transition:opacity .8s ease;opacity:1;}
-  .bg-img{z-index:1;opacity:0;transition:opacity .8s ease;}
-  .bg-img.visible{opacity:1;z-index:2;}
+  img.full{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;-webkit-user-select:none;user-select:none;}
+  /* image2: reveal left->right using clip-path */
+  #image2{z-index:10;transition:clip-path .9s ease, opacity .6s ease;clip-path:inset(0 100% 0 0);}
+  #image2.revealed{clip-path:inset(0 0 0 0);}
 
-  /* overlay to darken background for readability */
-  .overlay{
-    position:absolute;inset:0;background:linear-gradient(to top, rgba(0,0,0,0.45), rgba(0,0,0,0.2));z-index:3;opacity:0;transition:opacity .8s ease;
-  }
-  .overlay.visible{opacity:1;}
+  /* image1 diagonal */
+  #image1{z-index:6;opacity:0;transform:translate(-30%,30%) scale(.98);transition:transform 1000ms cubic-bezier(.2,.9,.2,1), opacity 700ms ease;}
+  #image1.show{opacity:1;transform:translate(0,0) scale(1);}
 
-  /* bubble container */
-  .bubble-wrap{position:absolute;z-index:5;inset:0;display:flex;align-items:flex-end;justify-content:center;padding:6vh 6vw;pointer-events:none;}
+  /* image3 arrow */
+  #image3{position:absolute;right:6vw;width:12vh;max-width:120px;height:auto;top:50%;transform:translateY(-50%);z-index:12;opacity:0;transition:opacity 700ms ease, transform 700ms ease;pointer-events:none;}
+  #image3.show{opacity:1;transform:translateY(-50%) translateX(0) scale(1);}
+  #image3.hide{opacity:0;transform:translateY(-50%) translateX(10px) scale(.98);}
+
+  /* loading screen (white) */
+  .loading-screen{position:absolute;inset:0;background:var(--bg-white);z-index:11;display:flex;align-items:center;justify-content:center;flex-direction:column;pointer-events:none;}
+  .loading-canvas-wrap{position:relative;width:90vw;max-width:900px;height:35vh;max-height:260px;overflow:visible;}
+  .tiles{position:absolute;inset:0;pointer-events:none;}
+  .tile{position:absolute;width:var(--cell-size);height:var(--cell-size);opacity:0;transform:scale(.95);transition:opacity 220ms ease, transform 260ms cubic-bezier(.2,.9,.2,1);will-change:transform,opacity;display:block;}
+  .tile.show{opacity:1;transform:scale(1);}
+
+  /* BUBBLE AREA - left-aligned vertical stack starting from screen midline */
+  .bubble-area{
+    position:absolute;
+    z-index:16;
+    top:10vh; /* will be adjusted responsively */
+    left:50%; /* start at midpoint of screen horizontally */
+    width:46vw; /* bubble column width */
+    max-width:520px;
+    transform:translateX(-50%); /* center container's left edge at midpoint, bubbles inside are left-aligned */
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    align-items:flex-start; /* left-aligned inside the column */
+    pointer-events:none;
+  }
   .bubble{
-    max-width:92%;
-    padding:14px 16px;
-    border-radius:18px;
-    margin:8px 0;
-    box-shadow:var(--shadow);
-    font-size:clamp(16px,4.2vw,20px);
-    line-height:1.25;
-    color:var(--text-color);
-    opacity:0; transform:translateY(10px) scale(.99);
-    transition:opacity .5s ease, transform .5s ease;
     pointer-events:auto;
-    backdrop-filter: blur(2px);
+    background:var(--bubble-bg);
+    color:var(--bubble-color);
+    padding:12px 16px;
+    border-radius:12px;
+    box-shadow:0 6px 18px rgba(0,0,0,0.28);
+    max-width:100%;
+    font-size:clamp(14px,3.6vw,18px);
+    line-height:1.3;
+    opacity:0; transform: translateY(-6px) scale(.99);
+    transition:opacity .36s ease, transform .36s cubic-bezier(.2,.9,.2,1);
   }
-  .bubble.show{opacity:1; transform:translateY(0) scale(1);}
-  .bubble.white{background: var(--bubble-white);}
-  .bubble.yellow{background: var(--bubble-yellow);}
+  .bubble.show{opacity:1;transform:translateY(0) scale(1);}
 
-  /* small top-left credit (optional) */
-  .credit{position:absolute;top:10px;left:12px;z-index:6;color:#fff;font-size:13px;opacity:.9;}
+  /* credit small */
+  .credit{position:absolute;top:10px;left:12px;z-index:18;color:#fff;font-size:13px;opacity:.9;}
 
-  /* make it friendly on very short screens */
-  @media (max-height:500px){
-    .bubble-wrap{padding:4vh 4vw;align-items:center;}
+  /* final end-screen */
+  .end-screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:20;background:var(--bg-dark);color:#fff;opacity:0;pointer-events:none;transition:opacity .32s ease;}
+  .end-screen.visible{opacity:1;pointer-events:auto;}
+  .big-xd{font-family:"Brush Script MT", "Comic Sans MS", "Segoe Script", "Bradley Hand", sans-serif; /* cartoonish fallback */ font-size:clamp(48px,12vw,120px);font-weight:700;letter-spacing:2px;}
+  .rate-wrap{margin-top:18px;display:flex;flex-direction:column;align-items:center;gap:12px;color:#bbb;font-size:16px;}
+
+  .stars{display:flex;gap:8px;}
+  .star{width:44px;height:44px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:26px;user-select:none;background:transparent;border:1px solid rgba(255,255,255,0.06);color:#888;transition:transform .18s ease,color .18s ease;}
+  .star:hover{transform:translateY(-4px)}
+  .star.on{color:gold;}
+
+  .thanks{font-size:20px;text-align:center;line-height:1.3;display:none;}
+  .thanks.show{display:block;}
+
+  /* responsive adjustments */
+  @media (max-width:900px){
+    .bubble-area{width:56vw;}
   }
+  @media (max-width:520px){
+    .bubble-area{left:50%; width:72vw;}
+    #image3{right:3vw;width:10vh;}
+  }
+
 </style>
 </head>
 <body>
-  <div class="stage">
-    <!-- 第一张先显示（image2） -->
-    <img class="cover-img" id="coverImg" src="image2.jpg" alt="cover">
-    <!-- 之后切成背景（image1） -->
-    <img class="bg-img" id="bgImg" src="image1.jpg" alt="background">
-    <div class="overlay" id="overlay"></div>
 
-    <div class="bubble-wrap" id="bubbleWrap" aria-hidden="true">
-      <div class="bubble white" id="b1">Heyyy Ahmed, happy birthday to you!🥳</div>
-      <div class="bubble yellow" id="b2">If I could give you something today, it would be a quiet moment where nothing hurts and presses you</div>
-      <div class="bubble white" id="b3">I see how much you’re carrying, and I respect you for that!</div>
-      <div class="bubble yellow" id="b4">I hope this year brings you more ease so that you can breathe. 🫂</div>
-      <div class="bubble white" id="b5">Remember! You can always be yourself with me! Lots of love!🥰</div>
+<!-- Landscape prompt (style C) -->
+<div id="landscapePrompt" aria-hidden="true">
+  <div class="txt">
+    Please view in landscape for the best experience.<br>
+    (The page auto-fits to landscape — you don't need to enable device rotation.)
+  </div>
+</div>
+
+<div id="app">
+  <div class="stage" id="stage">
+
+    <!-- image2 (initial) -->
+    <img id="image2" class="full" src="image2.jpg" alt="cover image2">
+
+    <!-- loading screen -->
+    <div id="loadingScreen" class="loading-screen" aria-hidden="true" style="display:none;">
+      <div class="loading-canvas-wrap" id="loadingWrap">
+        <div class="tiles" id="tilesContainer" aria-hidden="true" style="--cell-size:18px;"></div>
+      </div>
+    </div>
+
+    <!-- image3 arrow -->
+    <img id="image3" src="image3.png" alt="arrow (image3)">
+
+    <!-- image1 -->
+    <img id="image1" class="full" src="image1.jpg" alt="background image1">
+
+    <!-- bubble area (left-aligned column starting at center line) -->
+    <div id="bubbleArea" class="bubble-area" aria-hidden="true" style="visibility:hidden;">
+      <div class="bubble" id="b1">Heyyy Ahmed, happy birthday to you!🥳</div>
+      <div class="bubble" id="b2">If I could give you something today, it would be a quiet moment where nothing hurts and presses you</div>
+      <div class="bubble" id="b3">I see how much you’re carrying, and I respect you for that!</div>
+      <div class="bubble" id="b4">I hope this year brings you more ease so that you can breathe. 🫂</div>
+      <div class="bubble" id="b5">Remember! You can always be yourself with me! Lots of love!🥰</div>
     </div>
 
     <div class="credit">Made with care 🌙</div>
+
+    <!-- final end-screen -->
+    <div id="endScreen" class="end-screen" aria-hidden="true">
+      <div class="big-xd">xD</div>
+
+      <div class="rate-wrap" id="rateWrap" style="display:flex;flex-direction:column;align-items:center;">
+        <div style="color:#bbb;margin-bottom:6px;">Rate</div>
+        <div class="stars" id="stars">
+          <div class="star" data-score="1">★</div>
+          <div class="star" data-score="2">★</div>
+          <div class="star" data-score="3">★</div>
+          <div class="star" data-score="4">★</div>
+          <div class="star" data-score="5">★</div>
+        </div>
+      </div>
+
+      <div class="thanks" id="thanksMsg" style="margin-top:18px;">
+        ☝🏻🤓 thanks for your 5 stars ❤️<br><small style="opacity:.85">(knew you would do this xD)</small>
+      </div>
+    </div>
+
   </div>
+</div>
 
 <script>
+/*
+  Full orchestration:
+  1) Apply portrait->landscape transform if needed + show landscape prompt briefly
+  2) image2: reveal left->right, then hold 5s
+  3) loading screen: build tiles from image4 to form "loading..." (rows=15, cols=40) reveal left->right top->bottom
+  4) image3: fade in -> hold -> fade out
+  5) image1: diagonal appear (left-bottom -> right-top)
+  6) bubble area: left-aligned column starting at screen midline; show bubbles top->bottom; they don't disappear; after last bubble appears wait 5s
+  7) show end-screen with xD + stars
+  8) if user clicks 5 stars: fade out all else, show thanks centered text
+*/
+
 (function(){
-  // timing settings
-  const coverDuration = 5000; // ms for image2
-  const bubbleShowDuration = 4000; // ms per bubble
-  const coverImg = document.getElementById('coverImg');
-  const bgImg = document.getElementById('bgImg');
-  const overlay = document.getElementById('overlay');
-  const bubbles = [...document.querySelectorAll('.bubble')];
+  // timings (ms)
+  const image2RevealDuration = 1200;
+  const image2HoldAfter = 5000;
+  const loadingTileDelay = 24;
+  const loadingHoldAfter = 700;
+  const image3FadeIn = 700;
+  const image3Hold = 1000;
+  const image3FadeOut = 700;
+  const image1AnimDelay = 200;
+  const image1AnimDuration = 1000;
+  const bubbleDelayBetween = 700; // time between bubbles appearing (you asked sequential, top->bottom)
+  const bubbleFinalHold = 5000; // wait after last bubble appears
+  const landscapePromptDuration = 1800;
 
-  // helper to show background and start bubble sequence
-  function switchToBackground(){
-    coverImg.style.opacity = '0';
-    // show bg and overlay
-    bgImg.classList.add('visible');
-    overlay.classList.add('visible');
+  // DOM
+  const app = document.getElementById('app');
+  const prompt = document.getElementById('landscapePrompt');
+  const image2 = document.getElementById('image2');
+  const loadingScreen = document.getElementById('loadingScreen');
+  const tilesContainer = document.getElementById('tilesContainer');
+  const loadingWrap = document.getElementById('loadingWrap');
+  const image3 = document.getElementById('image3');
+  const image1 = document.getElementById('image1');
+  const bubbleArea = document.getElementById('bubbleArea');
+  const bubbles = Array.from(bubbleArea.querySelectorAll('.bubble'));
+  const endScreen = document.getElementById('endScreen');
+  const stars = document.getElementById('stars');
+  const thanksMsg = document.getElementById('thanksMsg');
 
-    // sequentially show each bubble
-    let i = 0;
-    function showNext(){
-      if(i>=bubbles.length) return;
-      const el = bubbles[i];
-      el.classList.add('show');
-      // hide previous one when next comes (optional)
-      setTimeout(()=>{
-        // if not last, hide it before showing next
-        if(i < bubbles.length - 1){
-          el.classList.remove('show');
-        }
-        i++;
-        // show next after small delay to get smooth transition
-        setTimeout(showNext, 200);
-      }, bubbleShowDuration);
+  // preload helper
+  function preload(src){ return new Promise((res,rej)=>{ const i=new Image(); i.src=src; i.onload=()=>res(i); i.onerror=()=>rej(); }); }
+  const image4Candidates = ['image4.png','image4.jpg','image4.jpeg'];
+
+  async function findImage4(){
+    for(const p of image4Candidates){
+      try { await preload(p); return p; } catch(e) { /* try next */ }
     }
-    // slight delay so bg settled
-    setTimeout(showNext, 400);
+    return null;
   }
 
-  // wait coverDuration then switch
-  setTimeout(switchToBackground, coverDuration);
+  // handle portrait -> rotate app to landscape and show prompt
+  function applyPortraitLandscapeTransform(){
+    const isPortrait = window.innerWidth < window.innerHeight;
+    if(isPortrait){
+      const scale = window.innerWidth / window.innerHeight;
+      // fix app to center and rotate
+      app.style.position = 'fixed';
+      app.style.left = '50%';
+      app.style.top = '50%';
+      app.style.transformOrigin = 'center center';
+      app.style.transform = `rotate(90deg) scale(${scale})`;
+      app.style.zIndex = '998';
+      // show prompt
+      prompt.classList.add('show');
+      prompt.setAttribute('aria-hidden','false');
+      setTimeout(()=>{ prompt.classList.remove('show'); prompt.setAttribute('aria-hidden','true'); }, landscapePromptDuration);
+    } else {
+      // reset
+      app.style.transform = '';
+      app.style.position = '';
+      app.style.left = '';
+      app.style.top = '';
+      app.style.zIndex = '';
+      prompt.classList.remove('show');
+      prompt.setAttribute('aria-hidden','true');
+    }
+    // small tweak: position bubbleArea vertically center offset if needed
+    adjustBubbleTop();
+  }
 
-  // optional: allow tap to skip cover immediately
-  coverImg.addEventListener('click', () => {
-    switchToBackground();
-  }, {passive:true});
+  function adjustBubbleTop(){
+    // Attempt to center bubble column vertically a bit; keep top at about 16% on small heights
+    const vh = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+    const topPx = Math.max(48, Math.round(vh * 0.10)); // use 10vh but min 48px
+    bubbleArea.style.top = topPx + 'px';
+  }
 
-  // make images non-draggable on mobile
-  [coverImg,bgImg].forEach(img => { img.ondragstart = () => false; });
+  // Sequence steps
+
+  // 1) reveal image2 left->right, then hold 5s
+  function revealImage2(){
+    return new Promise(resolve => {
+      image2.style.transition = `clip-path ${image2RevealDuration}ms ease, opacity .6s ease`;
+      requestAnimationFrame(()=>{ image2.classList.add('revealed'); });
+      setTimeout(()=> {
+        // keep visible for hold time
+        setTimeout(resolve, image2HoldAfter);
+      }, image2RevealDuration + 60);
+    });
+  }
+
+  // 2) build loading tile grid and animate
+  async function buildLoadingTilesAndAnimate(){
+    loadingScreen.style.display = 'flex';
+    loadingScreen.setAttribute('aria-hidden','false');
+
+    const image4Path = await findImage4();
+    const tileImgSrc = image4Path || '';
+
+    // medium grid: rows=15, cols=40
+    const rows = 15;
+    const cols = 40;
+    const wrapRect = loadingWrap.getBoundingClientRect();
+    let cellSize = Math.floor(wrapRect.height / rows);
+    cellSize = Math.max(10, Math.min(28, cellSize));
+    tilesContainer.style.setProperty('--cell-size', cellSize + 'px');
+
+    // offscreen canvas to render "loading..."
+    const canvas = document.createElement('canvas');
+    canvas.width = cols; canvas.height = rows;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    const fontSize = Math.floor(rows * 0.9);
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.fillStyle = '#000'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('loading...', canvas.width/2, canvas.height/2 + 1);
+
+    const imageData = ctx.getImageData(0,0,canvas.width,canvas.height).data;
+    const matrix = [];
+    for(let r=0;r<canvas.height;r++){
+      const row=[]; for(let c=0;c<canvas.width;c++){
+        const idx=(r*canvas.width+c)*4;
+        const lum = (0.299*imageData[idx] + 0.587*imageData[idx+1] + 0.114*imageData[idx+2]);
+        row.push(lum < 200);
+      }
+      matrix.push(row);
+    }
+
+    // center the grid in the loading wrap
+    const totalCols = cols, totalRows = rows;
+    const gridWidth = totalCols * cellSize;
+    const gridHeight = totalRows * cellSize;
+    const offsetLeft = Math.max(0, Math.round((wrapRect.width - gridWidth)/2));
+    const offsetTop = Math.max(0, Math.round((wrapRect.height - gridHeight)/2));
+
+    const positions = [];
+    for(let r=0;r<totalRows;r++){
+      for(let c=0;c<totalCols;c++){
+        if(matrix[r][c]) positions.push({r,c,left: offsetLeft + c*cellSize, top: offsetTop + r*cellSize});
+      }
+    }
+    // sort left->right, top->bottom (we want top->bottom? you requested left->right, top->bottom earlier; keep row-major)
+    positions.sort((a,b)=> (a.r - b.r) || (a.c - b.c));
+    tilesContainer.innerHTML = '';
+    positions.forEach(p=>{
+      const el = document.createElement('div'); el.className='tile';
+      el.style.left = p.left + 'px'; el.style.top = p.top + 'px';
+      el.style.width = cellSize + 'px'; el.style.height = cellSize + 'px';
+      if(tileImgSrc){
+        const im = document.createElement('img'); im.src = tileImgSrc; im.style.width='100%'; im.style.height='100%'; im.style.objectFit='cover'; im.draggable=false;
+        el.appendChild(im);
+      }else{
+        el.style.background = '#222'; el.style.borderRadius='6px';
+      }
+      tilesContainer.appendChild(el);
+    });
+
+    const tileEls = Array.from(tilesContainer.children);
+    for(let i=0;i<tileEls.length;i++){
+      setTimeout(() => { tileEls[i].classList.add('show'); }, i * loadingTileDelay);
+    }
+
+    await new Promise(res => setTimeout(res, tileEls.length * loadingTileDelay + loadingHoldAfter));
+    loadingScreen.style.display = 'none';
+    loadingScreen.setAttribute('aria-hidden','true');
+  }
+
+  // 3) image3 fade in/out
+  async function runImage3(){
+    return new Promise(resolve => {
+      image3.style.transition = `opacity ${image3FadeIn}ms ease, transform ${image3FadeIn}ms ease`;
+      image3.classList.add('show');
+      setTimeout(()=> {
+        image3.classList.add('hide');
+        image3.classList.remove('show');
+        setTimeout(()=>{ image3.classList.remove('hide'); resolve(); }, image3FadeOut + 60);
+      }, image3FadeIn + image3Hold);
+    });
+  }
+
+  // 4) image1 diagonal animate
+  async function animateImage1(){
+    image1.style.opacity = '1';
+    image1.style.transform = 'translate(-22%,18%) scale(.98)';
+    await new Promise(r => setTimeout(r, image1AnimDelay));
+    image1.classList.add('show');
+    await new Promise(r => setTimeout(r, image1AnimDuration + 80));
+  }
+
+  // 5) bubbles: show sequentially top->bottom from bubbleArea
+  async function showBubblesSequential(){
+    bubbleArea.style.visibility = 'visible';
+    bubbleArea.setAttribute('aria-hidden','false');
+    for(let i=0;i<bubbles.length;i++){
+      const el = bubbles[i];
+      // reveal sequentially
+      el.classList.add('show');
+      // ensure we wait bubbleDelayBetween before next
+      await new Promise(r => setTimeout(r, bubbleDelayBetween));
+    }
+    // after last bubble appears, wait bubbleFinalHold
+    await new Promise(r => setTimeout(r, bubbleFinalHold));
+  }
+
+  // 6) show end screen and stars handling
+  function showEndScreen(){
+    // fade out stage content (except endScreen)
+    document.querySelectorAll('.stage > :not(#endScreen)').forEach(el => {
+      el.style.transition = 'opacity 420ms ease';
+      el.style.opacity = '0';
+    });
+    setTimeout(()=> {
+      endScreen.classList.add('visible');
+      endScreen.setAttribute('aria-hidden','false');
+
+      const starEls = Array.from(stars.querySelectorAll('.star'));
+      starEls.forEach(s=>{
+        s.addEventListener('click', ()=>{
+          const score = Number(s.dataset.score || 0);
+          starEls.forEach(st => st.classList.toggle('on', Number(st.dataset.score) <= score));
+          if(score === 5){
+            // fade out all other content and show thanks centered
+            document.querySelectorAll('.stage > :not(#endScreen)').forEach(el=>{
+              el.style.transition = 'opacity 400ms ease';
+              el.style.opacity = '0';
+            });
+            setTimeout(()=>{
+              // hide rate UI and big-xd, show thanks message
+              document.getElementById('rateWrap').style.display = 'none';
+              document.querySelector('.big-xd').style.display = 'none';
+              thanksMsg.classList.add('show');
+            }, 420);
+          }
+        }, {passive:true});
+      });
+    }, 420);
+  }
+
+  // orchestration
+  async function runSequence(){
+    try{
+      // preload images as best effort
+      await Promise.allSettled([
+        preload('image2.jpg').catch(()=>null),
+        preload('image1.jpg').catch(()=>null),
+        preload('image3.png').catch(()=>null),
+        // image4 handled by findImage4
+      ]);
+
+      // small delay for paint
+      await new Promise(r => setTimeout(r,80));
+      // 1) image2 reveal and hold
+      image2.classList.add('revealed');
+      await new Promise(r => setTimeout(r, image2RevealDuration + image2HoldAfter + 120));
+
+      // 2) loading
+      await buildLoadingTilesAndAnimate();
+
+      // 3) image3 fade in/out
+      await runImage3();
+
+      // 4) image1 diagonal appear
+      await animateImage1();
+
+      // 5) show bubbles sequentially (left-aligned column starting at midline)
+      await showBubblesSequential();
+
+      // 6) proceed to end screen
+      showEndScreen();
+
+    }catch(err){
+      console.error('Sequence error:', err);
+      // fallback: show end screen
+      showEndScreen();
+    }
+  }
+
+  // initialize handlers
+  function init(){
+    // disable drag on images
+    document.querySelectorAll('img').forEach(im => im.ondragstart = () => false);
+
+    // handle resize/orientation -> apply rotation/scaling on portrait
+    function handleResize(){
+      const prev = app.style.transform || '';
+      applyPortraitLandscapeTransform();
+      adjustBubbleTop();
+    }
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+
+    // kick off sequence after first paint
+    requestAnimationFrame(()=> {
+      handleResize();
+      // if portrait at load show prompt briefly
+      if(window.innerWidth < window.innerHeight){
+        prompt.classList.add('show');
+        setTimeout(()=>{ prompt.classList.remove('show'); }, landscapePromptDuration);
+      }
+      runSequence();
+    });
+  }
+
+  // start
+  init();
 
 })();
 </script>
-</body>
 
+</body>
 </html>
